@@ -30,9 +30,11 @@ To create a more realistic model of market behavior, the simulation was upgraded
 
 The model is described by the formula:
 $$ \frac{dS_t}{S_t} = \mu dt + \sigma dW_t + dJ_t $$
+
 Where:
--   $ \mu dt + \sigma dW_t $ is the standard Geometric Brownian Motion.
--   $ dJ_t $ is a compound Poisson process representing the random jumps.
+
+- **μ dt + σ dW_t** represents the standard **Geometric Brownian Motion (Black–Scholes component)**.
+- **dJ_t** represents a **compound Poisson jump process**, capturing sudden market shocks such as crashes, financial crises, or geopolitical events.
 
 ### Key Findings
 This model provides a more nuanced view of risk by explicitly modeling the probability and magnitude of extreme events. The results show a wider distribution of potential outcomes, highlighting the "fat tails" often observed in financial markets.
