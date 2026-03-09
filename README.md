@@ -29,9 +29,9 @@ This initial model demonstrated that incorporating the shock led to significantl
 To create a more realistic model of market behavior, the simulation was upgraded to a **Merton Jump-Diffusion model**. This model acknowledges that asset prices do not move continuously and can experience sudden, large jumps.
 
 The model is described by the formula:
-$$
+```math
 \frac{dS_t}{S_t} = \mu dt + \sigma dW_t + dJ_t
-$$
+```
 
 Where:
 
