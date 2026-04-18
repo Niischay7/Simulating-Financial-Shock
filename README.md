@@ -18,6 +18,47 @@ This system allows traders and investors to track their real-time performance an
 - **Risk Mitigation Analysis:** Automatically calculates actionable safety strategies, such as precise 10% trailing stop-losses.
 - **Graphical Dashboard:** Automatically generates and saves a highly detailed `cli_shock_simulation.png` mathematical dashboard for deep visual analysis.
 
+## Example Output & Results
+
+### Mode 1: Live Portfolio Diagnostics
+When running the real-time tracker, the application outputs a clean, institutional-grade summary of your holdings:
+```text
+====================================================
+      LIVE PORTFOLIO TRACKER & DIAGNOSTICS      
+====================================================
+--- Real-Time Holdings & P&L ---
+Ticker   | Shares     | Avg Cost   | Curr Price | P&L ($)      | P&L (%) 
+-------------------------------------------------------------------------
+AAPL     | 10.00      | $150.00    | $270.23    | $1202.30     |  80.15%
+-------------------------------------------------------------------------
+TOTAL    | -          | $1500.00   | $2702.30   | $1202.30     |  80.15%
+
+--- 1-Year Performance Diagnostics ---
+Annualized Return:       37.19%
+Annualized Volatility:   23.56%
+Sharpe Ratio:            1.49
+Maximum Drawdown (1Y):   -13.80%
+```
+
+![Live Portfolio Diagnostics](portfolio_diagnostics.png)
+
+### Mode 2: Historical Shock Simulator
+Simulating a massive historical crash like the 2008 Financial Crisis yields predictive performance and mitigation data:
+```text
+====================================================
+         HISTORICAL SHOCK SIMULATOR                 
+====================================================
+--- Portfolio Value Prediction (1 Year Frame) ---
+Normal Expected Return:      +$8,450.21 (+8.45%)
+Shock Expected Return:       -$25,120.50 (-25.12%)
+
+--- Risk Mitigation & Hedging ---
+Trailing Stop-Loss (10%):    Saves ~$12,500 by exiting to cash
+Put Option Hedge Strategy:   Costs ~$2,000 upfront for downside protection
+```
+
+![Historical Shock Simulation](cli_shock_simulation.png)
+
 ## Setup & Installation
 
 1. Create a virtual environment (optional but recommended):
