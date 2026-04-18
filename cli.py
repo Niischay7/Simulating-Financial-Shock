@@ -3,6 +3,7 @@ import pandas as pd
 import numpy as np
 import sys
 import time
+from scipy.optimize import minimize
 import matplotlib.pyplot as plt
 
 # ANSI formatting
@@ -77,31 +78,177 @@ def get_input(prompt, cast_type=str, default=None):
         except ValueError:
             print(f"{Colors.FAIL}Invalid input. Please try again.{Colors.ENDC}")
 
-def simulate():
-    print_banner()
-    
-    portfolio_value = get_input("Enter your total portfolio value in USD", float, 100000)
-    print(f"\n{Colors.OKBLUE}--- Portfolio Allocation ---{Colors.ENDC}")
-    print("Add your assets via Yahoo Finance tickers (e.g. AAPL, SPY, GC=F). Leave blank to finish.")
+def portfolio_diagnostics():
+    print(f"\n{Colors.OKCYAN}{Colors.BOLD}===================================================={Colors.ENDC}")
+    print(f"{Colors.OKCYAN}{Colors.BOLD}      LIVE PORTFOLIO TRACKER & DIAGNOSTICS      {Colors.ENDC}")
+    print(f"{Colors.OKCYAN}{Colors.BOLD}===================================================={Colors.ENDC}")
     
     portfolio = []
+    print("Enter your current holdings. Leave ticker blank to finish.")
     while True:
         ticker = input(f"{Colors.OKGREEN}?{Colors.ENDC} Asset Ticker: ").strip().upper()
         if not ticker:
             if len(portfolio) > 0:
                 break
+            continue
+            
+        shares = get_input(f"Number of shares owned for {ticker}", float, 10.0)
+        avg_cost = get_input(f"Average purchase price per share for {ticker} ($)", float, 150.0)
+        portfolio.append({'ticker': ticker, 'shares': shares, 'avg_cost': avg_cost})
+
+    tickers = [p['ticker'] for p in portfolio]
+    
+    print(f"\n{Colors.BOLD}Fetching live market data and 1-year historicals...{Colors.ENDC}")
+    try:
+        data = yf.download(tickers, period='1y', progress=False)['Close']
+        if data.empty:
+            print(f"{Colors.FAIL}Error: No data found! Did you misspell a ticker? (e.g., AAPL instead of APPL).{Colors.ENDC}")
+            return
+            
+        if len(tickers) == 1:
+            data = pd.DataFrame(data)
+            data.columns = tickers
+            
+        missing_tickers = [t for t in tickers if t not in data.columns or data[t].dropna().empty]
+        if missing_tickers:
+            print(f"{Colors.FAIL}Error: Could not fetch data for {', '.join(missing_tickers)}. Please check spelling.{Colors.ENDC}")
+            return
+            
+    except Exception as e:
+        print(f"{Colors.FAIL}Error downloading data: {e}{Colors.ENDC}")
+        return
+        
+    data = data.dropna(how='all')
+    if data.empty:
+        print(f"{Colors.FAIL}Error: All data downloaded was empty.{Colors.ENDC}")
+        return
+        
+    current_prices = data.iloc[-1]
+    
+    total_cost_basis = 0
+    total_current_value = 0
+    
+    print(f"\n{Colors.OKBLUE}--- Real-Time Holdings & P&L ---{Colors.ENDC}")
+    header = f"{'Ticker':<8} | {'Shares':<10} | {'Avg Cost':<10} | {'Curr Price':<10} | {'P&L ($)':<12} | {'P&L (%)':<8}"
+    print(header)
+    print("-" * len(header))
+    
+    weights = []
+    for p in portfolio:
+        t = p['ticker']
+        shares = p['shares']
+        avg_cost = p['avg_cost']
+        cost_basis = shares * avg_cost
+        
+        current_price = current_prices[t]
+        current_val = shares * current_price
+        
+        pnl_dollar = current_val - cost_basis
+        pnl_pct = (pnl_dollar / cost_basis) * 100 if cost_basis > 0 else 0
+        
+        total_cost_basis += cost_basis
+        total_current_value += current_val
+        weights.append(current_val)
+        
+        color = Colors.OKGREEN if pnl_dollar >= 0 else Colors.FAIL
+        print(f"{t:<8} | {shares:<10.2f} | ${avg_cost:<9.2f} | ${current_price:<9.2f} | {color}${pnl_dollar:<11.2f}{Colors.ENDC} | {color}{pnl_pct:>6.2f}%{Colors.ENDC}")
+
+    total_pnl_dollar = total_current_value - total_cost_basis
+    total_pnl_pct = (total_pnl_dollar / total_cost_basis) * 100 if total_cost_basis > 0 else 0
+    tot_color = Colors.OKGREEN if total_pnl_dollar >= 0 else Colors.FAIL
+    print("-" * len(header))
+    print(f"{'TOTAL':<8} | {'-':<10} | ${total_cost_basis:<9.2f} | ${total_current_value:<9.2f} | {tot_color}${total_pnl_dollar:<11.2f}{Colors.ENDC} | {tot_color}{total_pnl_pct:>6.2f}%{Colors.ENDC}")
+
+    # Performance Diagnostics
+    weights = np.array(weights) / total_current_value if total_current_value > 0 else np.zeros(len(weights))
+    returns = data.pct_change().dropna()
+    portfolio_daily_returns = (returns * weights).sum(axis=1)
+    
+    ann_return = portfolio_daily_returns.mean() * 252
+    ann_volatility = portfolio_daily_returns.std() * np.sqrt(252)
+    risk_free_rate = 0.02
+    sharpe_ratio = (ann_return - risk_free_rate) / ann_volatility if ann_volatility > 0 else 0
+    
+    cumulative_ret = (1 + portfolio_daily_returns).cumprod()
+    running_max = np.maximum.accumulate(cumulative_ret)
+    drawdowns = (cumulative_ret - running_max) / running_max
+    port_max_drawdown = np.min(drawdowns) if len(drawdowns) > 0 else 0
+
+    print(f"\n{Colors.OKBLUE}--- 1-Year Performance Diagnostics ---{Colors.ENDC}")
+    print(f"Annualized Return:       {ann_return*100:.2f}%")
+    print(f"Annualized Volatility:   {ann_volatility*100:.2f}%")
+    print(f"Sharpe Ratio:            {sharpe_ratio:.2f}")
+    print(f"Maximum Drawdown (1Y):   {Colors.FAIL}{port_max_drawdown*100:.2f}%{Colors.ENDC}")
+    
+    # === GRAPHICAL ANALYSIS ===
+    print(f"\n{Colors.BOLD}Generating Live Portfolio Dashboard graph...{Colors.ENDC}")
+    try:
+        fig, axs = plt.subplots(2, 2, figsize=(16, 12))
+        fig.suptitle("Live Portfolio Health Dashboard", fontsize=18, fontweight='bold')
+        
+        starting_value = total_current_value / cumulative_ret.iloc[-1]
+        historical_portfolio_value = cumulative_ret * starting_value
+        
+        axs[0, 0].plot(historical_portfolio_value.index, historical_portfolio_value, color='green', linewidth=2)
+        axs[0, 0].set_title("1. 1-Year Historical Portfolio Growth")
+        axs[0, 0].set_ylabel("Portfolio Value ($)")
+        axs[0, 0].grid(True, alpha=0.3)
+        ticks = axs[0, 0].get_yticks()
+        axs[0, 0].set_yticks(ticks)
+        axs[0, 0].set_yticklabels(['${:,.0f}'.format(x) for x in ticks])
+        
+        labels = [p['ticker'] for p in portfolio]
+        sizes = [p['shares'] * current_prices[p['ticker']] for p in portfolio]
+        axs[0, 1].pie(sizes, labels=labels, autopct='%1.1f%%', startangle=140)
+        axs[0, 1].set_title("2. Current Asset Allocation")
+        
+        axs[1, 0].fill_between(drawdowns.index, drawdowns * 100, 0, color='red', alpha=0.5)
+        axs[1, 0].plot(drawdowns.index, drawdowns * 100, color='darkred', linewidth=1)
+        axs[1, 0].set_title("3. 1-Year Drawdown Profile")
+        axs[1, 0].set_ylabel("Drawdown (%)")
+        axs[1, 0].grid(True, alpha=0.3)
+        
+        normalized_data = data / data.iloc[0] * 100 - 100
+        if isinstance(normalized_data, pd.DataFrame):
+            for t in tickers:
+                axs[1, 1].plot(normalized_data.index, normalized_data[t], label=t)
+        else:
+            axs[1, 1].plot(normalized_data.index, normalized_data, label=tickers[0])
+        axs[1, 1].set_title("4. Individual Asset Performance (1Y % Return)")
+        axs[1, 1].set_ylabel("Return (%)")
+        axs[1, 1].axhline(0, color='black', linewidth=1)
+        axs[1, 1].legend()
+        axs[1, 1].grid(True, alpha=0.3)
+        
+        plt.tight_layout(rect=[0, 0.03, 1, 0.96])
+        plt.savefig("portfolio_diagnostics.png", dpi=300)
+        print(f"{Colors.OKGREEN}Success! Graph saved as 'portfolio_diagnostics.png'.{Colors.ENDC}")
+    except Exception as e:
+        print(f"{Colors.FAIL}Notice: Could not generate graph ({e}).{Colors.ENDC}")
+
+    input(f"\n{Colors.OKGREEN}Press Enter to return to main menu...{Colors.ENDC}")
+
+
+def simulate():
+    print(f"\n{Colors.OKCYAN}{Colors.BOLD}===================================================={Colors.ENDC}")
+    print(f"{Colors.OKCYAN}{Colors.BOLD}         HISTORICAL SHOCK SIMULATOR                 {Colors.ENDC}")
+    print(f"{Colors.OKCYAN}{Colors.BOLD}===================================================={Colors.ENDC}")
+    
+    portfolio_value = get_input("Enter your total portfolio value in USD", float, 100000)
+    print(f"\n{Colors.OKBLUE}--- Portfolio Selection ---{Colors.ENDC}")
+    print("Add your assets via Yahoo Finance tickers (e.g. AAPL, SPY, GC=F). Leave blank to finish.")
+    
+    tickers = []
+    while True:
+        ticker = input(f"{Colors.OKGREEN}?{Colors.ENDC} Asset Ticker: ").strip().upper()
+        if not ticker:
+            if len(tickers) > 0:
+                break
             else:
                 print(f"{Colors.WARNING}Please enter at least one asset.{Colors.ENDC}")
                 continue
-        
-        weight = get_input(f"Weight/Allocation % for {ticker}", float, 100 if len(portfolio) == 0 else 0)
-        if weight > 0:
-            portfolio.append({'ticker': ticker, 'weight': weight})
-            
-    # Normalize weights
-    total_weight = sum([p['weight'] for p in portfolio])
-    for p in portfolio:
-        p['weight'] = p['weight'] / total_weight
+        if ticker not in tickers:
+            tickers.append(ticker)
 
     print(f"\n{Colors.OKBLUE}--- Select Historical Tragedy (Shock Event) ---{Colors.ENDC}")
     for k, v in SHOCKS.items():
@@ -114,9 +261,7 @@ def simulate():
             break
         print(f"{Colors.FAIL}Invalid choice.{Colors.ENDC}")
 
-    print(f"\n{Colors.BOLD}Fetching historical data for {len(portfolio)} asset(s)...{Colors.ENDC}")
-    tickers = [p['ticker'] for p in portfolio]
-    weights = np.array([p['weight'] for p in portfolio])
+    print(f"\n{Colors.BOLD}Fetching historical data for {len(tickers)} asset(s)...{Colors.ENDC}")
     num_assets = len(tickers)
 
     try:
@@ -149,7 +294,52 @@ def simulate():
         print(f"{Colors.FAIL}Not enough historical data for these tickers before the shock date.{Colors.ENDC}")
         sys.exit(1)
 
-    print(f"{Colors.BOLD}Calculating correlations and jump-diffusion parameters...{Colors.ENDC}")
+    weights = np.zeros(num_assets)
+    if num_assets == 1:
+        weights = np.array([1.0])
+    else:
+        print(f"\n{Colors.OKBLUE}--- Portfolio Weight Allocation ---{Colors.ENDC}")
+        print("[1] Manual Weights (Custom)")
+        print("[2] Optimize for Maximum Sharpe Ratio (Max Risk-Adjusted Return)")
+        print("[3] Optimize for Minimum Volatility (Safest)")
+        weight_choice = get_input("Select Allocation Strategy", str, "1")
+        
+        if weight_choice in ["2", "3"]:
+            print(f"{Colors.BOLD}Optimizing Portfolio Weights using pre-shock historical data...{Colors.ENDC}")
+            cov_matrix_opt = pre_shock_returns.cov() * 252
+            mean_returns_opt = pre_shock_returns.mean() * 252
+            risk_free_rate = 0.02
+            
+            def neg_sharpe_ratio(w):
+                p_ret = np.sum(mean_returns_opt * w)
+                p_vol = np.sqrt(np.dot(w.T, np.dot(cov_matrix_opt, w)))
+                return -(p_ret - risk_free_rate) / p_vol
+                
+            def portfolio_volatility(w):
+                return np.sqrt(np.dot(w.T, np.dot(cov_matrix_opt, w)))
+                
+            constraints = ({'type': 'eq', 'fun': lambda x: np.sum(x) - 1})
+            bounds = tuple((0.0, 1.0) for _ in range(num_assets))
+            init_guess = np.array(num_assets * [1. / num_assets,])
+            
+            if weight_choice == "2":
+                opt_result = minimize(neg_sharpe_ratio, init_guess, method='SLSQP', bounds=bounds, constraints=constraints)
+            else:
+                opt_result = minimize(portfolio_volatility, init_guess, method='SLSQP', bounds=bounds, constraints=constraints)
+                
+            weights = np.round(opt_result.x, 4)
+            weights = weights / np.sum(weights)
+            
+            print(f"{Colors.OKGREEN}Optimization Complete! Optimal Weights:{Colors.ENDC}")
+            for t, w in zip(tickers, weights):
+                print(f"  {t}: {w*100:.1f}%")
+        else:
+            for i, ticker in enumerate(tickers):
+                w = get_input(f"Weight/Allocation % for {ticker}", float, 100 if i == 0 else 0)
+                weights[i] = w
+            weights = weights / np.sum(weights)
+
+    print(f"\n{Colors.BOLD}Calculating correlations and jump-diffusion parameters...{Colors.ENDC}")
     mean_returns = pre_shock_returns.mean().values
     cov_matrix = pre_shock_returns.cov()
     
@@ -429,9 +619,28 @@ def simulate():
     except Exception as e:
         print(f"{Colors.FAIL}Notice: Could not generate graph ({e}).{Colors.ENDC}\n")
 
+def main_menu():
+    while True:
+        print_banner()
+        print(f"{Colors.BOLD}Select Mode:{Colors.ENDC}")
+        print("  [1] Live Portfolio Tracker & Diagnostics (P&L, Sharpe, Volatility)")
+        print("  [2] Stress-Test against Historical Shocks (Monte Carlo Simulation)")
+        print("  [3] Exit")
+        
+        choice = get_input("Choice", str, "1")
+        if choice == "1":
+            portfolio_diagnostics()
+        elif choice == "2":
+            simulate()
+        elif choice == "3":
+            print(f"{Colors.OKGREEN}Goodbye!{Colors.ENDC}")
+            sys.exit(0)
+        else:
+            print(f"{Colors.FAIL}Invalid choice.{Colors.ENDC}")
+
 if __name__ == "__main__":
     try:
-        simulate()
+        main_menu()
     except KeyboardInterrupt:
-        print(f"\n{Colors.WARNING}Simulation aborted by user.{Colors.ENDC}")
+        print(f"\n{Colors.WARNING}Aborted by user.{Colors.ENDC}")
         sys.exit(0)

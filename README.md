@@ -1,15 +1,22 @@
-# Financial Shock Portfolio Simulator
+# Financial Risk & Portfolio Management Simulator
 
-Stress-test your investment portfolio against historical black swan events using Monte Carlo Jump-Diffusion models.
+A dual-mode CLI application that acts as both a **Live Portfolio Diagnostics Tracker** and an advanced **Historical Black Swan Simulator**. 
 
-This project allows you to simulate how your active investment portfolio would have historically performed during massive economic tragedies, using real data from the S&P 500, Nasdaq, individual stocks, and more. 
+This system allows traders and investors to track their real-time performance and mathematically stress-test how their current holdings would survive during massive economic tragedies, utilizing Monte Carlo Jump-Diffusion models and Modern Portfolio Theory.
 
 ## Features
-- **Dynamic Asset Allocation:** Create any portfolio combination using Yahoo Finance tickers (e.g., AAPL, SPY, GC=F).
+
+### Mode 1: Live Portfolio Tracker & Diagnostics
+- **Real-Time P&L Tracking:** Input your holdings (shares and average cost) to automatically fetch live market prices and calculate your exact Dollar and Percentage P&L.
+- **Quantitative Performance Metrics:** Automatically calculates 1-Year Annualized Returns, Volatility, Sharpe Ratio, and Maximum Drawdown.
+- **Health Dashboard:** Generates a 4-panel `portfolio_diagnostics.png` visualization containing historical growth paths, asset allocation pie charts, and normalized drawdown profiles.
+
+### Mode 2: Historical Shock Simulator
 - **Historical Black Swans:** Simulate against events like the 2008 Financial Crisis, COVID-19 pandemic crash, Dot-Com Bubble, and 9/11.
+- **Modern Portfolio Theory (MPT) Optimization:** Instead of guessing weights, use our built-in engine to automatically allocate your assets for Maximum Sharpe Ratio or Minimum Volatility based on historical correlations.
 - **Monte Carlo Generation:** Uses advanced correlated Geometric Brownian Motion with Jump-Diffusion mathematics to compute 500 potential future trajectories.
-- **Risk Mitigation Analysis:** Automatically calculates actionable safety strategies, such as precise 10% trailing stop-losses, and Option Hedging cost requirements.
-- **Graphical Dashboard:** Automatically generates and saves a highly-detailed 4-panel mathematical dashboard (`cli_shock_simulation.png`) for deep visual analysis.
+- **Risk Mitigation Analysis:** Automatically calculates actionable safety strategies, such as precise 10% trailing stop-losses.
+- **Graphical Dashboard:** Automatically generates and saves a highly detailed `cli_shock_simulation.png` mathematical dashboard for deep visual analysis.
 
 ## Setup & Installation
 
@@ -31,4 +38,4 @@ Launch the interactive CLI simulator:
 python cli.py
 ```
 
-Follow the prompts to enter your capital, add asset tickers, assign their weights, and select the historical shock you want to test against.
+Follow the on-screen prompts to select your mode, build your portfolio, and generate advanced analytics.
